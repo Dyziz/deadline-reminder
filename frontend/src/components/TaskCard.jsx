@@ -7,8 +7,12 @@ import React from "react";
  * @returns {string}
  */
 function formatDeadline(deadline) {
+  if (deadline === null) {
+    return "Tidak valid";
+  }
   const d = new Date(deadline);
   return d.toLocaleString("id-ID", {
+    timeZone: "Asia/Jakarta",
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -37,13 +41,21 @@ export default function TaskCard({ task, onToggleStatus, onDelete }) {
       <div>
         <strong>{task.judul}</strong>
         <div className="meta">{task.mata_kuliah}</div>
-        <div className="meta">Deadline: {formatDeadline(task.deadline)}</div>
-        {task.deskripsi && <div className="meta">{task.deskripsi}</div>}
+        <div className="meta">
+          Deadline: {formatDeadline(task.deadline)}
+          {task.deadline !== null && " WIB"}
+        </div>        {task.deskripsi && <div className="meta">{task.deskripsi}</div>}
       </div>
       <div style={{ textAlign: "right" }}>
         <span className={`badge ${task.status}`}>
           {task.status === "selesai" ? "Selesai" : "Belum"}
         </span>
+        {task.kondisi === "nearDeadline" && (
+            <span className="badge nearDeadline">Mendekati deadline</span>
+        )}
+        {task.kondisi === "overdue" && (
+            <span className="badge overdue">Telah melewati deadline</span>
+        )}
         <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
           <button className="btn" onClick={() => onToggleStatus(task)}>
             {task.status === "selesai" ? "Tandai Belum" : "Tandai Selesai"}

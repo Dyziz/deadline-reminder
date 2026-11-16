@@ -83,6 +83,16 @@ a {
   color: #92400e;
 }
 
+.badge.nearDeadline {
+  background: #fde68a;
+  color: #c27702;
+}
+
+.badge.overdue {
+  background: #f8d7da;
+  color: #842029;
+}
+
 .badge.selesai {
   background: #d1fae5;
   color: #065f46;
