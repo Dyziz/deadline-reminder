@@ -7,6 +7,13 @@ const router = Router();
 // Seluruh endpoint tugas membutuhkan login.
 router.use(requireAuth);
 
+function DeadlineWIB(deadline) {
+  const punyaZona = /(?:Z|[+-]\d{2}:\d{2})$/i.test(deadline);
+  if (!punyaZona) {
+    return new Date(deadline + "+07:00").getTime();
+  }
+  return new Date(deadline).getTime();
+}
 /**
  * GET /api/tasks
  * Daftar seluruh tugas milik pengguna yang sedang login, lintas semua mata
@@ -23,14 +30,40 @@ router.use(requireAuth);
  */
 router.get("/", (req, res) => {
   const db = readDB();
+  const sekarang = Date.now();
   const tasks = db.tasks
     .filter((t) => t.user_id === req.user.id)
     .map((t) => {
       const course = db.courses.find((c) => c.id === t.mata_kuliah_id);
-      return { ...t, mata_kuliah: course ? course.name : null };
+      const deadline = DeadlineWIB(t.deadline);
+      if (Number.isNaN(deadline)) {
+        return {
+          ...t,
+          mata_kuliah: course ? course.name : null,
+          deadline: null,
+          sisaWaktu: null,
+          kondisi: "invalidDeadline",
+        };
+      }
+      const sisaWaktu = deadline - sekarang;
+      let kondisi = "normal";
+      if (t.status === "selesai") {
+        kondisi = "selesai";
+      } else if (sisaWaktu < 0) {
+        kondisi = "overdue";
+      } else if (sisaWaktu < 24 * 60 * 60 * 1000) {
+        kondisi = "nearDeadline";
+      }
+      return { ...t, deadline: new Date(deadline).toISOString(), mata_kuliah: course ? course.name : null, sisaWaktu, kondisi };
     })
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
+    .sort((a, b) => {
+      if (a.kondisi === "nearDeadline" && b.kondisi !== "nearDeadline") {
+        return -1;
+      } else if (b.kondisi === "nearDeadline" && a.kondisi !== "nearDeadline") {
+        return 1;
+      }
+        return new Date(b.created_at) - new Date(a.created_at);
+    });
   res.json({ tasks });
 });
 
@@ -63,6 +96,11 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: "mata_kuliah_id, judul, dan deadline wajib diisi." });
   }
 
+  const waktuDeadline = DeadlineWIB(deadline);
+  if (Number.isNaN(waktuDeadline)) {
+    return res.status(400).json({ error: "deadline tidak valid." });
+  }
+
   const db = readDB();
   const course = db.courses.find((c) => c.id === Number(mata_kuliah_id) && c.user_id === req.user.id);
   if (!course) {
@@ -75,7 +113,7 @@ router.post("/", (req, res) => {
     mata_kuliah_id: Number(mata_kuliah_id),
     judul,
     deskripsi: deskripsi || "",
-    deadline,
+    deadline: new Date(waktuDeadline).toISOString(),
     status: "belum",
     created_at: new Date().toISOString()
   };
@@ -101,9 +139,15 @@ router.put("/:id", (req, res) => {
   }
 
   const { judul, deskripsi, deadline, status } = req.body;
+  if (deadline !== undefined) {
+    const waktuDeadline = DeadlineWIB(deadline);
+    if (Number.isNaN(waktuDeadline)) {
+      return res.status(400).json({ error: "deadline tidak valid." });
+    }
+    task.deadline = new Date(waktuDeadline).toISOString();
+  }
   if (judul !== undefined) task.judul = judul;
   if (deskripsi !== undefined) task.deskripsi = deskripsi;
-  if (deadline !== undefined) task.deadline = deadline;
   if (status !== undefined) {
     if (!["belum", "selesai"].includes(status)) {
       return res.status(400).json({ error: "Status hanya boleh 'belum' atau 'selesai'." });
